@@ -1,0 +1,59 @@
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      externalServiceCircuitBreaker:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        waitDurationInOpenState: 10000
+        failureRateThreshold: 50
+        eventConsumerBufferSize: 10
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+  retry:
+    instances:
+      externalServiceRetry:
+        maxAttempts: 3
+        waitDuration: 1000ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        retryExceptions: java.lang.RuntimeException
+  bulkhead:
+    instances:
+      externalServiceBulkhead:
+        maxConcurrentCalls: 5
+        maxWaitDuration: 500ms
+  rateLimiter:
+    instances:
+      externalServiceRateLimiter:
+        limitForPeriod: 5
+        limitRefreshPeriod: 10s
+        timeoutDuration: 0
+  timelimiter:
+    instances:
+      externalServiceTimeLimiter:
+        timeoutDuration: 1s
+        cancelRunningFuture: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+#        include: health,info,metrics,circuitbreakerevents,retryevents,bulkheadevents,ratelimiterevents
+        include: "*"
+  endpoint:
+    health:
+      show-details: always
+  health:
+    circuitbreakers:
+      enabled: true
+    ratelimiters:
+      enabled: true
+
+spring:
+  thymeleaf:
+    cache: false
+server:
+  port: 8080
