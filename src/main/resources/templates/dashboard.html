@@ -184,12 +184,12 @@
         const startTime = Date.now();
 
         fetch(url)
-            .then(response => response.text())
-            .then(data => {
+            .then(response => response.text().then(data => ({status: response.status, data})))
+            .then(({status, data}) => {
                 const duration = Date.now() - startTime;
-                const label = classifyResponse(data);
+                const label = classifyResponse(status, data);
                 resultArea.className = `result-area ${label.cssClass}`;
-                resultArea.innerHTML = `${label.icon} ${label.text} (${duration}ms)<br>${escapeHtml(data)}`;
+                resultArea.innerHTML = `${label.icon} ${label.text} - HTTP ${status} (${duration}ms)<br>${escapeHtml(data)}`;
                 fetchCircuitBreakerMetrics();
             })
             .catch(error => {
@@ -220,15 +220,15 @@
 
         for (let i = 0; i < count; i++) {
             fetch(url)
-                .then(response => response.text())
-                .then(data => {
-                    const label = classifyResponse(data);
+                .then(response => response.text().then(data => ({status: response.status, data})))
+                .then(({status, data}) => {
+                    const label = classifyResponse(status, data);
                     if (label.text === 'Success') {
                         succeeded++;
                     } else {
                         limited++;
                     }
-                    results.push(`[${i + 1}] ${label.icon} ${label.text}`);
+                    results.push(`[${i + 1}] ${label.icon} ${label.text} (HTTP ${status})`);
                     completed++;
                     updateStressTestResult();
                 })
@@ -250,21 +250,28 @@
         }
     }
 
-    // Classifies the response text to distinguish real failures from resilience rejections (rate limit, open circuit, full bulkhead)
-    function classifyResponse(data) {
-        if (data.includes('Rate limit exceeded')) {
-            return { text: 'Rate Limited', icon: '🚫', cssClass: 'result-warning' };
+    // Classifies the response primarily by HTTP status code (set explicitly by each fallback), using the
+    // body text only to distinguish which resilience pattern produced a shared status (e.g. 503).
+    function classifyResponse(status, data) {
+        if (status === 200) {
+            return {text: 'Success', icon: '✓', cssClass: 'result-success'};
         }
-        if (data.includes('Circuit breaker is OPEN')) {
-            return { text: 'Circuit Open', icon: '⛔', cssClass: 'result-warning' };
+        if (status === 429) {
+            return {text: 'Rate Limited', icon: '🚫', cssClass: 'result-warning'};
         }
-        if (data.includes('Bulkhead is full')) {
-            return { text: 'Bulkhead Full', icon: '🧱', cssClass: 'result-warning' };
+        if (status === 504) {
+            return {text: 'Timeout', icon: '⏳', cssClass: 'result-warning'};
         }
-        if (data.includes('Fallback response')) {
-            return { text: 'Fallback', icon: '⚠', cssClass: 'result-warning' };
+        if (status === 503) {
+            if (data.includes('Circuit breaker is OPEN')) {
+                return {text: 'Circuit Open', icon: '⛔', cssClass: 'result-warning'};
+            }
+            if (data.includes('Bulkhead is full')) {
+                return {text: 'Bulkhead Full', icon: '🧱', cssClass: 'result-warning'};
+            }
+            return {text: 'Service Unavailable', icon: '⚠', cssClass: 'result-warning'};
         }
-        return { text: 'Success', icon: '✓', cssClass: 'result-success' };
+        return {text: `HTTP ${status}`, icon: '✗', cssClass: 'result-error'};
     }
 
     function escapeHtml(text) {

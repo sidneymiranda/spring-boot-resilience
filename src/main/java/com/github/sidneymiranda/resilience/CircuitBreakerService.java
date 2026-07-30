@@ -10,6 +10,8 @@ import io.github.resilience4j.retry.annotation.Retry;
 import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.CompletableFuture;
@@ -33,62 +35,68 @@ public class CircuitBreakerService {
     }
 
     @CircuitBreaker(name = CIRCUIT_BREAKER_INSTANCE, fallbackMethod = "fallbackMethod")
-    public String callServiceWithCircuitBreaker() {
+    public ResponseEntity<String> callServiceWithCircuitBreaker() {
         log.info("Calling external service with Circuit Breaker protection...");
-        return externalService.callExternalService();
+        return ResponseEntity.ok(externalService.callExternalService());
     }
 
     @Retry(name = RETRY_INSTANCE, fallbackMethod = "fallbackMethod")
-    public String callServiceWithRetry() {
+    public ResponseEntity<String> callServiceWithRetry() {
         log.info("Calling external service with Retry protection...");
-        return externalService.callExternalService();
+        return ResponseEntity.ok(externalService.callExternalService());
     }
 
     @Bulkhead(name = BULKHEAD_INSTANCE, fallbackMethod = "fallbackMethod")
-    public String callServiceWithBulkhead() {
+    public ResponseEntity<String> callServiceWithBulkhead() {
         log.info("Calling external service with Bulkhead protection...");
-        return externalService.callExternalService();
+        return ResponseEntity.ok(externalService.callExternalService());
     }
 
     @RateLimiter(name = RATE_LIMITER_INSTANCE, fallbackMethod = "fallbackMethod")
-    public String callServiceWithRateLimiter() {
+    public ResponseEntity<String> callServiceWithRateLimiter() {
         log.info("Calling external service with Rate Limiter protection...");
-        return externalService.callExternalService();
+        return ResponseEntity.ok(externalService.callExternalService());
     }
 
     @TimeLimiter(name = TIME_LIMITER_INSTANCE, fallbackMethod = "timeLimiterFallbackMethod")
-    public CompletableFuture<String> callServiceWithTimeLimiter() {
+    public CompletableFuture<ResponseEntity<String>> callServiceWithTimeLimiter() {
         log.info("Calling external service with Time Limiter protection...");
-        return CompletableFuture.supplyAsync(externalService::callExternalService);
+        return CompletableFuture.supplyAsync(() -> ResponseEntity.ok(externalService.callExternalService()));
     }
 
-    private String fallbackMethod(Exception throwable) {
+    private ResponseEntity<String> fallbackMethod(Exception throwable) {
         log.error("Fallback method called due to: {}", throwable.getMessage());
-        return "Fallback response: External service is currently unavailable. Please try again later.";
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body("Fallback response: External service is currently unavailable. Please try again later.");
     }
 
-    private String fallbackMethod(CallNotPermittedException throwable) {
+    private ResponseEntity<String> fallbackMethod(CallNotPermittedException throwable) {
         log.warn("Circuit Breaker is OPEN, call not permitted: {}", throwable.getMessage());
-        return "Fallback response: Circuit breaker is OPEN. Calls are temporarily blocked.";
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body("Fallback response: Circuit breaker is OPEN. Calls are temporarily blocked.");
     }
 
-    private String fallbackMethod(RequestNotPermitted throwable) {
+    private ResponseEntity<String> fallbackMethod(RequestNotPermitted throwable) {
         log.warn("Rate limit exceeded: {}", throwable.getMessage());
-        return "Fallback response: Rate limit exceeded. Too many requests in the current period.";
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body("Fallback response: Rate limit exceeded. Too many requests in the current period.");
     }
 
-    private String fallbackMethod(BulkheadFullException throwable) {
+    private ResponseEntity<String> fallbackMethod(BulkheadFullException throwable) {
         log.warn("Bulkhead is full: {}", throwable.getMessage());
-        return "Fallback response: Bulkhead is full. Too many concurrent calls in progress.";
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body("Fallback response: Bulkhead is full. Too many concurrent calls in progress.");
     }
 
-    private CompletableFuture<String> timeLimiterFallbackMethod(Exception throwable) {
+    private CompletableFuture<ResponseEntity<String>> timeLimiterFallbackMethod(Exception throwable) {
         log.error("Time Limiter fallback method called due to: {}", throwable.getMessage());
-        return CompletableFuture.supplyAsync(() -> "Fallback response: The service took too long to response. Please try again later.");
+        return CompletableFuture.completedFuture(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body("Fallback response: The service took too long to response. Please try again later."));
     }
 
-    private CompletableFuture<String> timeLimiterFallbackMethod(TimeoutException exception) {
+    private CompletableFuture<ResponseEntity<String>> timeLimiterFallbackMethod(TimeoutException exception) {
         log.error("Time Limiter fallback method called due to timeout: {}", exception.getMessage());
-        return CompletableFuture.supplyAsync(() -> "Fallback response: The service request timed out. Please try again later.");
+        return CompletableFuture.completedFuture(ResponseEntity.status(HttpStatus.GATEWAY_TIMEOUT)
+                .body("Fallback response: The service request timed out. Please try again later."));
     }
 }
