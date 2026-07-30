@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Controller
 @RequestMapping("/dashboard")
@@ -26,20 +27,8 @@ public class DashboardController {
     public Map<String, Object> circuitBreakers() {
         return circuitBreakerRegistry.getAllCircuitBreakers().stream()
                 .collect(
-                        java.util.stream.Collectors.toMap(
+                        Collectors.toMap(
                                 CircuitBreaker::getName,
-//                                cb -> Map.of(
-//                                        "state", cb.getState().name(),
-//                                        "metrics", Map.of(
-//                                                "failureRate", cb.getMetrics().getFailureRate(),
-//                                                "slowCallRate", cb.getMetrics().getSlowCallRate(),
-//                                                "numberOfBufferedCalls", cb.getMetrics().getNumberOfBufferedCalls(),
-//                                                "numberOfFailedCalls", cb.getMetrics().getNumberOfFailedCalls(),
-//                                                "numberOfSuccessfulCalls", cb.getMetrics().getNumberOfSuccessfulCalls(),
-//                                                "numberOfSlowCalls", cb.getMetrics().getNumberOfSlowCalls(),
-//                                                "numberOfNotPermittedCalls", cb.getMetrics().getNumberOfNotPermittedCalls()
-//                                        )
-//                                )
                                 circuitBreaker -> {
                                     Map<String, Object> details = new HashMap<>();
                                     details.put("state", circuitBreaker.getState().name());
