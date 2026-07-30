@@ -1,7 +1,10 @@
 package com.github.sidneymiranda.resilience;
 
+import io.github.resilience4j.bulkhead.BulkheadFullException;
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import io.github.resilience4j.retry.annotation.Retry;
 import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
@@ -62,6 +65,21 @@ public class CircuitBreakerService {
     private String fallbackMethod(Exception throwable) {
         log.error("Fallback method called due to: {}", throwable.getMessage());
         return "Fallback response: External service is currently unavailable. Please try again later.";
+    }
+
+    private String fallbackMethod(CallNotPermittedException throwable) {
+        log.warn("Circuit Breaker is OPEN, call not permitted: {}", throwable.getMessage());
+        return "Fallback response: Circuit breaker is OPEN. Calls are temporarily blocked.";
+    }
+
+    private String fallbackMethod(RequestNotPermitted throwable) {
+        log.warn("Rate limit exceeded: {}", throwable.getMessage());
+        return "Fallback response: Rate limit exceeded. Too many requests in the current period.";
+    }
+
+    private String fallbackMethod(BulkheadFullException throwable) {
+        log.warn("Bulkhead is full: {}", throwable.getMessage());
+        return "Fallback response: Bulkhead is full. Too many concurrent calls in progress.";
     }
 
     private CompletableFuture<String> timeLimiterFallbackMethod(Exception throwable) {

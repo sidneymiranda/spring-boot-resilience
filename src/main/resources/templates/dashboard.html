@@ -3,185 +3,293 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title th:text="${title}">Circuit Breaker Dashboard</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f5f5f5;
-        }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        h1 {
-            color: #333;
-            text-align: center;
-        }
-        .dashboard {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
-            margin-top: 20px;
-        }
-        .card {
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            padding: 20px;
-            flex: 1;
-            min-width: 300px;
-        }
-        .card h2 {
-            margin-top: 0;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 10px;
-        }
-        .state {
-            display: inline-block;
-            padding: 5px 10px;
-            border-radius: 4px;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
-        .state-CLOSED {
-            background-color: #4CAF50;
-            color: white;
-        }
-        .state-OPEN {
-            background-color: #F44336;
-            color: white;
-        }
-        .state-HALF_OPEN {
-            background-color: #FF9800;
-            color: white;
-        }
-        .metrics {
-            margin-top: 15px;
-        }
-        .metric {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 5px;
-        }
-        .metric-name {
-            font-weight: bold;
-        }
-        .refresh-button {
-            display: block;
-            margin: 20px auto;
-            padding: 10px 20px;
-            background-color: #2196F3;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        .refresh-button:hover {
-            background-color: #0b7dda;
-        }
-    </style>
+    <title th:text="${title}">Resilience Patterns Dashboard</title>
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
 </head>
 <body>
 <div class="container">
-    <h1>Circuit Breaker Dashboard</h1>
+    <div class="header">
+        <h1>🛡️ Resilience Patterns Dashboard</h1>
+        <p>Test and monitor resilience patterns in action</p>
+    </div>
 
-    <button id="refresh-button" class="refresh-button">Refresh Data</button>
+    <div class="toolbar">
+        <button class="btn btn-primary" id="refresh-button">🔄 Refresh All</button>
+        <button class="btn btn-secondary" id="clear-results-button">✕ Clear Results</button>
+    </div>
 
-    <div id="dashboard" class="dashboard">
-        <div class="card">
-            <h2>Loading...</h2>
-            <p>Please wait while we fetch the circuit breaker data.</p>
+    <div id="patterns" class="patterns-grid">
+        <div class="pattern-card circuit-breaker">
+            <h2 class="pattern-title">
+                <span class="pattern-icon">🔌</span>
+                Circuit Breaker
+            </h2>
+            <p class="pattern-description">Stops request when failure rate is high, preventing cascading failures.</p>
+            <div class="config-panel" id="config-circuitBreaker"></div>
+            <div id="cb-state"></div>
+            <div class="metrics-grid" id="cb-metrics"></div>
+            <div class="actions">
+                <button class="btn-test" onclick="testPattern('circuit-breaker')">Test Now</button>
+                <button class="btn-test" onclick="testMultiple('circuit-breaker', 5)">Stress (5x)</button>
+            </div>
+            <div class="result-area" id="circuit-breaker-result"></div>
         </div>
+
+        <div class="pattern-card retry">
+            <h2 class="pattern-title">
+                <span class="pattern-icon">🔁</span>
+                Retry
+            </h2>
+            <p class="pattern-description">Automatically retries failed requests up to configured attempts.</p>
+            <div class="config-panel" id="config-retry"></div>
+            <div class="actions">
+                <button class="btn-test" onclick="testPattern('retry')">Test Now</button>
+                <button class="btn-test" onclick="testMultiple('retry', 5)">Stress (5x)</button>
+            </div>
+            <div class="result-area" id="retry-result"></div>
+        </div>
+
+        <div class="pattern-card rate-limiter">
+            <h2 class="pattern-title">
+                <span class="pattern-icon">⏱️</span>
+                Rate Limiter
+            </h2>
+            <p class="pattern-description">Restricts request frequency to prevent resource exhaustion.</p>
+            <div class="config-panel" id="config-rateLimiter"></div>
+            <div class="actions">
+                <button class="btn-test" onclick="testPattern('rate-limiter')">Test Now</button>
+                <button class="btn-test" onclick="testMultiple('rate-limiter', 8)">Stress (8x)</button>
+            </div>
+            <div class="result-area" id="rate-limiter-result"></div>
+        </div>
+
+        <div class="pattern-card time-limiter">
+            <h2 class="pattern-title">
+                <span class="pattern-icon">⏳</span>
+                Time Limiter
+            </h2>
+            <p class="pattern-description">Aborts requests that exceed the configured timeout duration.</p>
+            <div class="config-panel" id="config-timeLimiter"></div>
+            <div class="actions">
+                <button class="btn-test" onclick="testPattern('time-limiter')">Test Now</button>
+                <button class="btn-test" onclick="testMultiple('time-limiter', 5)">Stress (5x)</button>
+            </div>
+            <div class="result-area" id="time-limiter-result"></div>
+        </div>
+
+        <div class="pattern-card bulkhead">
+            <h2 class="pattern-title">
+                <span class="pattern-icon">🚪</span>
+                Bulkhead
+            </h2>
+            <p class="pattern-description">Isolates threads/resources to limit concurrent calls impact.</p>
+            <div class="config-panel" id="config-bulkhead"></div>
+            <div class="actions">
+                <button class="btn-test" onclick="testPattern('bulkhead')">Test Now</button>
+                <button class="btn-test" onclick="testMultiple('bulkhead', 8)">Stress (8x)</button>
+            </div>
+            <div class="result-area" id="bulkhead-result"></div>
+        </div>
+    </div>
+
+    <div class="info-panel">
+        <h3>💡 About This Dashboard</h3>
+        <p>Click "Test Now" to trigger a single call, or "Stress" to test the pattern under load.</p>
+        <p>The Rate Limiter and Bulkhead stress tests intentionally exceed the configured limits to demonstrate rejection behavior.</p>
     </div>
 </div>
 
 <script>
-    // Function to fetch circuit breaker data
-    function fetchCircuitBreakerData() {
+    const patterns = {
+        'circuit-breaker': '/api/resilience/circuit-breaker',
+        'retry': '/api/resilience/retry',
+        'rate-limiter': '/api/resilience/rate-limiter',
+        'time-limiter': '/api/resilience/time-limiter',
+        'bulkhead': '/api/resilience/bulkhead'
+    };
+
+    function fetchCircuitBreakerMetrics() {
         fetch('/dashboard/circuit-breakers')
             .then(response => response.json())
+            .then(data => updateCircuitBreakerCard(data))
+            .catch(error => console.error('Error fetching metrics:', error));
+    }
+
+    function updateCircuitBreakerCard(data) {
+        const cbData = data['externalServiceCircuitBreaker'];
+        if (!cbData) return;
+
+        const stateDiv = document.getElementById('cb-state');
+        stateDiv.innerHTML = `<div class="state-badge state-${cbData.state}">${cbData.state}</div>`;
+
+        const metricsDiv = document.getElementById('cb-metrics');
+        metricsDiv.innerHTML = `
+            <div class="metric-item">
+                <div class="metric-label">Failure Rate</div>
+                <div class="metric-value">${cbData.failureRate.toFixed(2)}%</div>
+            </div>
+            <div class="metric-item">
+                <div class="metric-label">Slow Call Rate</div>
+                <div class="metric-value">${cbData.slowCallRate.toFixed(2)}%</div>
+            </div>
+            <div class="metric-item">
+                <div class="metric-label">Successful Calls</div>
+                <div class="metric-value">${cbData.numberOfSuccessfulCalls}</div>
+            </div>
+            <div class="metric-item">
+                <div class="metric-label">Failed Calls</div>
+                <div class="metric-value">${cbData.numberOfFailedCalls}</div>
+            </div>
+            <div class="metric-item">
+                <div class="metric-label">Slow Calls</div>
+                <div class="metric-value">${cbData.numberOfSlowCalls}</div>
+            </div>
+            <div class="metric-item">
+                <div class="metric-label">Not Permitted</div>
+                <div class="metric-value">${cbData.numberOfNotPermittedCalls}</div>
+            </div>
+        `;
+    }
+
+    // Fetch and render the static configuration values applied to each pattern instance
+    function fetchConfigs() {
+        fetch('/dashboard/configs')
+            .then(response => response.json())
             .then(data => {
-                updateDashboard(data);
+                for (const [pattern, config] of Object.entries(data)) {
+                    const panel = document.getElementById(`config-${pattern}`);
+                    if (!panel) continue;
+
+                    let html = '<div class="config-title">Configuration</div>';
+                    for (const [label, value] of Object.entries(config)) {
+                        html += `<div class="config-item"><span>${label}</span><span>${value}</span></div>`;
+                    }
+                    panel.innerHTML = html;
+                }
+            })
+            .catch(error => console.error('Error fetching configs:', error));
+    }
+
+    function testPattern(pattern) {
+        const resultArea = document.getElementById(`${pattern}-result`);
+        if (!resultArea) {
+            console.error(`Result area not found for pattern: ${pattern}`);
+            return;
+        }
+        const url = patterns[pattern];
+
+        resultArea.className = 'result-area result-loading';
+        resultArea.innerHTML = '<span class="loading-spinner"></span>Testing...';
+
+        const startTime = Date.now();
+
+        fetch(url)
+            .then(response => response.text())
+            .then(data => {
+                const duration = Date.now() - startTime;
+                const label = classifyResponse(data);
+                resultArea.className = `result-area ${label.cssClass}`;
+                resultArea.innerHTML = `${label.icon} ${label.text} (${duration}ms)<br>${escapeHtml(data)}`;
+                fetchCircuitBreakerMetrics();
             })
             .catch(error => {
-                console.error('Error fetching circuit breaker data:', error);
-                document.getElementById('dashboard').innerHTML = `
-                        <div class="card">
-                            <h2>Error</h2>
-                            <p>Failed to fetch circuit breaker data. Please try again later.</p>
-                        </div>
-                    `;
+                const duration = Date.now() - startTime;
+                resultArea.className = 'result-area result-error';
+                resultArea.innerHTML = `✗ Error (${duration}ms)<br>${escapeHtml(error.message)}`;
+                fetchCircuitBreakerMetrics();
             });
     }
 
-    // Function to update the dashboard with circuit breaker data
-    function updateDashboard(data) {
-        const dashboard = document.getElementById('dashboard');
-        dashboard.innerHTML = '';
-
-        if (Object.keys(data).length === 0) {
-            dashboard.innerHTML = `
-                    <div class="card">
-                        <h2>No Circuit Breakers</h2>
-                        <p>No circuit breakers are currently registered.</p>
-                    </div>
-                `;
+    function testMultiple(pattern, count) {
+        const resultArea = document.getElementById(`${pattern}-result`);
+        if (!resultArea) {
+            console.error(`Result area not found for pattern: ${pattern}`);
             return;
         }
 
-        for (const [name, details] of Object.entries(data)) {
-            const card = document.createElement('div');
-            card.className = 'card';
+        resultArea.className = 'result-area result-loading';
+        resultArea.innerHTML = '<span class="loading-spinner"></span>Running stress test...';
 
-            const state = details.state;
-            const metrics = `
-                    <div class="metric">
-                        <span class="metric-name">Failure Rate:</span>
-                        <span>${details.failureRate.toFixed(2)}%</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-name">Slow Call Rate:</span>
-                        <span>${details.slowCallRate.toFixed(2)}%</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-name">Successful Calls:</span>
-                        <span>${details.numberOfSuccessfulCalls}</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-name">Failed Calls:</span>
-                        <span>${details.numberOfFailedCalls}</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-name">Slow Calls:</span>
-                        <span>${details.numberOfSlowCalls}</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-name">Not Permitted Calls:</span>
-                        <span>${details.numberOfNotPermittedCalls}</span>
-                    </div>
-                `;
+        const url = patterns[pattern];
+        let completed = 0;
+        let succeeded = 0;
+        let limited = 0;
+        let failed = 0;
+        const startTime = Date.now();
+        const results = [];
 
-            card.innerHTML = `
-                    <h2>${name}</h2>
-                    <div class="state state-${state}">${state}</div>
-                    <div class="metrics">${metrics}</div>
-                `;
+        for (let i = 0; i < count; i++) {
+            fetch(url)
+                .then(response => response.text())
+                .then(data => {
+                    const label = classifyResponse(data);
+                    if (label.text === 'Success') {
+                        succeeded++;
+                    } else {
+                        limited++;
+                    }
+                    results.push(`[${i + 1}] ${label.icon} ${label.text}`);
+                    completed++;
+                    updateStressTestResult();
+                })
+                .catch(error => {
+                    failed++;
+                    results.push(`[${i + 1}] ✗ ${error.message}`);
+                    completed++;
+                    updateStressTestResult();
+                });
+        }
 
-            dashboard.appendChild(card);
+        function updateStressTestResult() {
+            if (completed === count) {
+                const duration = Date.now() - startTime;
+                resultArea.className = (failed > 0 || limited > 0) ? 'result-area result-warning' : 'result-area result-success';
+                resultArea.innerHTML = `Stress Test Complete (${duration}ms)<br>✓ ${succeeded} succeeded, ⚠ ${limited} rejected, ✗ ${failed} error<br><br>${results.join('<br>')}`;
+                fetchCircuitBreakerMetrics();
+            }
         }
     }
 
-    // Fetch data when the page loads
-    document.addEventListener('DOMContentLoaded', fetchCircuitBreakerData);
+    // Classifies the response text to distinguish real failures from resilience rejections (rate limit, open circuit, full bulkhead)
+    function classifyResponse(data) {
+        if (data.includes('Rate limit exceeded')) {
+            return { text: 'Rate Limited', icon: '🚫', cssClass: 'result-warning' };
+        }
+        if (data.includes('Circuit breaker is OPEN')) {
+            return { text: 'Circuit Open', icon: '⛔', cssClass: 'result-warning' };
+        }
+        if (data.includes('Bulkhead is full')) {
+            return { text: 'Bulkhead Full', icon: '🧱', cssClass: 'result-warning' };
+        }
+        if (data.includes('Fallback response')) {
+            return { text: 'Fallback', icon: '⚠', cssClass: 'result-warning' };
+        }
+        return { text: 'Success', icon: '✓', cssClass: 'result-success' };
+    }
 
-    // Refresh data when the refresh button is clicked
-    document.getElementById('refresh-button').addEventListener('click', fetchCircuitBreakerData);
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
 
-    // Auto-refresh every 5 seconds
-    setInterval(fetchCircuitBreakerData, 5000);
+    document.getElementById('refresh-button').addEventListener('click', function() {
+        fetchCircuitBreakerMetrics();
+        fetchConfigs();
+    });
+
+    document.getElementById('clear-results-button').addEventListener('click', function() {
+        document.querySelectorAll('.result-area').forEach(el => {
+            el.innerHTML = '';
+            el.className = 'result-area';
+        });
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+        fetchCircuitBreakerMetrics();
+        fetchConfigs();
+        setInterval(fetchCircuitBreakerMetrics, 3000);
+    });
 </script>
 </body>
 </html>
