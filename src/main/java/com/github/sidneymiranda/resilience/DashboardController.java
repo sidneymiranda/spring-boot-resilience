@@ -1,7 +1,15 @@
 package com.github.sidneymiranda.resilience;
 
+import io.github.resilience4j.bulkhead.Bulkhead;
+import io.github.resilience4j.bulkhead.BulkheadRegistry;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.ratelimiter.RateLimiter;
+import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
+import io.github.resilience4j.retry.Retry;
+import io.github.resilience4j.retry.RetryRegistry;
+import io.github.resilience4j.timelimiter.TimeLimiter;
+import io.github.resilience4j.timelimiter.TimeLimiterRegistry;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -12,6 +20,8 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 @Controller
@@ -19,11 +29,46 @@ import java.util.stream.Collectors;
 public class DashboardController {
 
     private final CircuitBreakerRegistry circuitBreakerRegistry;
+    private final RetryRegistry retryRegistry;
+    private final RateLimiterRegistry rateLimiterRegistry;
+    private final BulkheadRegistry bulkheadRegistry;
+    private final TimeLimiterRegistry timeLimiterRegistry;
     private final Environment environment;
 
-    public DashboardController(CircuitBreakerRegistry circuitBreakerRegistry, Environment environment) {
+    // Resilience4j does not expose a built-in Metrics object for TimeLimiter, so successes/timeouts/errors
+    // are tracked here via event listeners registered for every instance (existing and future ones).
+    private final Map<String, AtomicLong> timeLimiterSuccessCounts = new ConcurrentHashMap<>();
+    private final Map<String, AtomicLong> timeLimiterTimeoutCounts = new ConcurrentHashMap<>();
+    private final Map<String, AtomicLong> timeLimiterErrorCounts = new ConcurrentHashMap<>();
+
+    public DashboardController(CircuitBreakerRegistry circuitBreakerRegistry,
+                                RetryRegistry retryRegistry,
+                                RateLimiterRegistry rateLimiterRegistry,
+                                BulkheadRegistry bulkheadRegistry,
+                                TimeLimiterRegistry timeLimiterRegistry,
+                                Environment environment) {
         this.circuitBreakerRegistry = circuitBreakerRegistry;
+        this.retryRegistry = retryRegistry;
+        this.rateLimiterRegistry = rateLimiterRegistry;
+        this.bulkheadRegistry = bulkheadRegistry;
+        this.timeLimiterRegistry = timeLimiterRegistry;
         this.environment = environment;
+
+        this.timeLimiterRegistry.getAllTimeLimiters().forEach(this::registerTimeLimiterEvents);
+        this.timeLimiterRegistry.getEventPublisher()
+                .onEntryAdded(event -> registerTimeLimiterEvents(event.getAddedEntry()));
+    }
+
+    private void registerTimeLimiterEvents(TimeLimiter timeLimiter) {
+        String name = timeLimiter.getName();
+        timeLimiterSuccessCounts.putIfAbsent(name, new AtomicLong());
+        timeLimiterTimeoutCounts.putIfAbsent(name, new AtomicLong());
+        timeLimiterErrorCounts.putIfAbsent(name, new AtomicLong());
+
+        timeLimiter.getEventPublisher()
+                .onSuccess(event -> timeLimiterSuccessCounts.get(name).incrementAndGet())
+                .onTimeout(event -> timeLimiterTimeoutCounts.get(name).incrementAndGet())
+                .onError(event -> timeLimiterErrorCounts.get(name).incrementAndGet());
     }
 
     @GetMapping("/circuit-breakers")
@@ -46,6 +91,81 @@ public class DashboardController {
                                     details.put("numberOfSlowCalls", metrics.getNumberOfSlowCalls());
                                     details.put("numberOfNotPermittedCalls", metrics.getNumberOfNotPermittedCalls());
 
+                                    return details;
+                                }
+                        )
+                );
+    }
+
+    @GetMapping("/retries")
+    @ResponseBody
+    public Map<String, Object> retries() {
+        return retryRegistry.getAllRetries().stream()
+                .collect(
+                        Collectors.toMap(
+                                Retry::getName,
+                                retry -> {
+                                    Map<String, Object> details = new HashMap<>();
+                                    Retry.Metrics metrics = retry.getMetrics();
+                                    details.put("numberOfSuccessfulCallsWithoutRetryAttempt", metrics.getNumberOfSuccessfulCallsWithoutRetryAttempt());
+                                    details.put("numberOfSuccessfulCallsWithRetryAttempt", metrics.getNumberOfSuccessfulCallsWithRetryAttempt());
+                                    details.put("numberOfFailedCallsWithoutRetryAttempt", metrics.getNumberOfFailedCallsWithoutRetryAttempt());
+                                    details.put("numberOfFailedCallsWithRetryAttempt", metrics.getNumberOfFailedCallsWithRetryAttempt());
+                                    return details;
+                                }
+                        )
+                );
+    }
+
+    @GetMapping("/rate-limiters")
+    @ResponseBody
+    public Map<String, Object> rateLimiters() {
+        return rateLimiterRegistry.getAllRateLimiters().stream()
+                .collect(
+                        Collectors.toMap(
+                                RateLimiter::getName,
+                                rateLimiter -> {
+                                    Map<String, Object> details = new HashMap<>();
+                                    RateLimiter.Metrics metrics = rateLimiter.getMetrics();
+                                    details.put("availablePermissions", metrics.getAvailablePermissions());
+                                    details.put("numberOfWaitingThreads", metrics.getNumberOfWaitingThreads());
+                                    return details;
+                                }
+                        )
+                );
+    }
+
+    @GetMapping("/bulkheads")
+    @ResponseBody
+    public Map<String, Object> bulkheads() {
+        return bulkheadRegistry.getAllBulkheads().stream()
+                .collect(
+                        Collectors.toMap(
+                                Bulkhead::getName,
+                                bulkhead -> {
+                                    Map<String, Object> details = new HashMap<>();
+                                    Bulkhead.Metrics metrics = bulkhead.getMetrics();
+                                    details.put("availableConcurrentCalls", metrics.getAvailableConcurrentCalls());
+                                    details.put("maxAllowedConcurrentCalls", metrics.getMaxAllowedConcurrentCalls());
+                                    return details;
+                                }
+                        )
+                );
+    }
+
+    @GetMapping("/time-limiters")
+    @ResponseBody
+    public Map<String, Object> timeLimiters() {
+        return timeLimiterRegistry.getAllTimeLimiters().stream()
+                .collect(
+                        Collectors.toMap(
+                                TimeLimiter::getName,
+                                timeLimiter -> {
+                                    String name = timeLimiter.getName();
+                                    Map<String, Object> details = new HashMap<>();
+                                    details.put("numberOfSuccessfulCalls", timeLimiterSuccessCounts.getOrDefault(name, new AtomicLong()).get());
+                                    details.put("numberOfTimeouts", timeLimiterTimeoutCounts.getOrDefault(name, new AtomicLong()).get());
+                                    details.put("numberOfErrors", timeLimiterErrorCounts.getOrDefault(name, new AtomicLong()).get());
                                     return details;
                                 }
                         )

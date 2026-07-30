@@ -42,6 +42,7 @@
             </h2>
             <p class="pattern-description">Automatically retries failed requests up to configured attempts.</p>
             <div class="config-panel" id="config-retry"></div>
+            <div class="metrics-grid" id="retry-metrics"></div>
             <div class="actions">
                 <button class="btn-test" onclick="testPattern('retry')">Test Now</button>
                 <button class="btn-test" onclick="testMultiple('retry', 5)">Stress (5x)</button>
@@ -56,6 +57,7 @@
             </h2>
             <p class="pattern-description">Restricts request frequency to prevent resource exhaustion.</p>
             <div class="config-panel" id="config-rateLimiter"></div>
+            <div class="metrics-grid" id="rate-limiter-metrics"></div>
             <div class="actions">
                 <button class="btn-test" onclick="testPattern('rate-limiter')">Test Now</button>
                 <button class="btn-test" onclick="testMultiple('rate-limiter', 8)">Stress (8x)</button>
@@ -70,6 +72,7 @@
             </h2>
             <p class="pattern-description">Aborts requests that exceed the configured timeout duration.</p>
             <div class="config-panel" id="config-timeLimiter"></div>
+            <div class="metrics-grid" id="time-limiter-metrics"></div>
             <div class="actions">
                 <button class="btn-test" onclick="testPattern('time-limiter')">Test Now</button>
                 <button class="btn-test" onclick="testMultiple('time-limiter', 5)">Stress (5x)</button>
@@ -84,6 +87,7 @@
             </h2>
             <p class="pattern-description">Isolates threads/resources to limit concurrent calls impact.</p>
             <div class="config-panel" id="config-bulkhead"></div>
+            <div class="metrics-grid" id="bulkhead-metrics"></div>
             <div class="actions">
                 <button class="btn-test" onclick="testPattern('bulkhead')">Test Now</button>
                 <button class="btn-test" onclick="testMultiple('bulkhead', 8)">Stress (8x)</button>
@@ -122,33 +126,94 @@
         const stateDiv = document.getElementById('cb-state');
         stateDiv.innerHTML = `<div class="state-badge state-${cbData.state}">${cbData.state}</div>`;
 
-        const metricsDiv = document.getElementById('cb-metrics');
-        metricsDiv.innerHTML = `
+        renderMetrics('cb-metrics', {
+            'Failure Rate': `${cbData.failureRate.toFixed(2)}%`,
+            'Slow Call Rate': `${cbData.slowCallRate.toFixed(2)}%`,
+            'Successful Calls': cbData.numberOfSuccessfulCalls,
+            'Failed Calls': cbData.numberOfFailedCalls,
+            'Slow Calls': cbData.numberOfSlowCalls,
+            'Not Permitted': cbData.numberOfNotPermittedCalls
+        });
+    }
+
+    // Renders a simple label/value map into a metrics-grid container
+    function renderMetrics(elementId, metrics) {
+        const container = document.getElementById(elementId);
+        if (!container) return;
+
+        container.innerHTML = Object.entries(metrics).map(([label, value]) => `
             <div class="metric-item">
-                <div class="metric-label">Failure Rate</div>
-                <div class="metric-value">${cbData.failureRate.toFixed(2)}%</div>
+                <div class="metric-label">${label}</div>
+                <div class="metric-value">${value}</div>
             </div>
-            <div class="metric-item">
-                <div class="metric-label">Slow Call Rate</div>
-                <div class="metric-value">${cbData.slowCallRate.toFixed(2)}%</div>
-            </div>
-            <div class="metric-item">
-                <div class="metric-label">Successful Calls</div>
-                <div class="metric-value">${cbData.numberOfSuccessfulCalls}</div>
-            </div>
-            <div class="metric-item">
-                <div class="metric-label">Failed Calls</div>
-                <div class="metric-value">${cbData.numberOfFailedCalls}</div>
-            </div>
-            <div class="metric-item">
-                <div class="metric-label">Slow Calls</div>
-                <div class="metric-value">${cbData.numberOfSlowCalls}</div>
-            </div>
-            <div class="metric-item">
-                <div class="metric-label">Not Permitted</div>
-                <div class="metric-value">${cbData.numberOfNotPermittedCalls}</div>
-            </div>
-        `;
+        `).join('');
+    }
+
+    function fetchRetryMetrics() {
+        fetch('/dashboard/retries')
+            .then(response => response.json())
+            .then(data => {
+                const retryData = data['externalServiceRetry'];
+                if (!retryData) return;
+                renderMetrics('retry-metrics', {
+                    'Success (no retry)': retryData.numberOfSuccessfulCallsWithoutRetryAttempt,
+                    'Success (with retry)': retryData.numberOfSuccessfulCallsWithRetryAttempt,
+                    'Failed (no retry)': retryData.numberOfFailedCallsWithoutRetryAttempt,
+                    'Failed (with retry)': retryData.numberOfFailedCallsWithRetryAttempt
+                });
+            })
+            .catch(error => console.error('Error fetching retry metrics:', error));
+    }
+
+    function fetchRateLimiterMetrics() {
+        fetch('/dashboard/rate-limiters')
+            .then(response => response.json())
+            .then(data => {
+                const rlData = data['externalServiceRateLimiter'];
+                if (!rlData) return;
+                renderMetrics('rate-limiter-metrics', {
+                    'Available Permits': rlData.availablePermissions,
+                    'Waiting Threads': rlData.numberOfWaitingThreads
+                });
+            })
+            .catch(error => console.error('Error fetching rate limiter metrics:', error));
+    }
+
+    function fetchBulkheadMetrics() {
+        fetch('/dashboard/bulkheads')
+            .then(response => response.json())
+            .then(data => {
+                const bhData = data['externalServiceBulkhead'];
+                if (!bhData) return;
+                renderMetrics('bulkhead-metrics', {
+                    'Available Slots': bhData.availableConcurrentCalls,
+                    'Max Concurrent Calls': bhData.maxAllowedConcurrentCalls
+                });
+            })
+            .catch(error => console.error('Error fetching bulkhead metrics:', error));
+    }
+
+    function fetchTimeLimiterMetrics() {
+        fetch('/dashboard/time-limiters')
+            .then(response => response.json())
+            .then(data => {
+                const tlData = data['externalServiceTimeLimiter'];
+                if (!tlData) return;
+                renderMetrics('time-limiter-metrics', {
+                    'Successful Calls': tlData.numberOfSuccessfulCalls,
+                    'Timeouts': tlData.numberOfTimeouts,
+                    'Errors': tlData.numberOfErrors
+                });
+            })
+            .catch(error => console.error('Error fetching time limiter metrics:', error));
+    }
+
+    function fetchAllMetrics() {
+        fetchCircuitBreakerMetrics();
+        fetchRetryMetrics();
+        fetchRateLimiterMetrics();
+        fetchBulkheadMetrics();
+        fetchTimeLimiterMetrics();
     }
 
     // Fetch and render the static configuration values applied to each pattern instance
@@ -190,13 +255,13 @@
                 const label = classifyResponse(status, data);
                 resultArea.className = `result-area ${label.cssClass}`;
                 resultArea.innerHTML = `${label.icon} ${label.text} - HTTP ${status} (${duration}ms)<br>${escapeHtml(data)}`;
-                fetchCircuitBreakerMetrics();
+                fetchAllMetrics();
             })
             .catch(error => {
                 const duration = Date.now() - startTime;
                 resultArea.className = 'result-area result-error';
                 resultArea.innerHTML = `✗ Error (${duration}ms)<br>${escapeHtml(error.message)}`;
-                fetchCircuitBreakerMetrics();
+                fetchAllMetrics();
             });
     }
 
@@ -245,7 +310,7 @@
                 const duration = Date.now() - startTime;
                 resultArea.className = (failed > 0 || limited > 0) ? 'result-area result-warning' : 'result-area result-success';
                 resultArea.innerHTML = `Stress Test Complete (${duration}ms)<br>✓ ${succeeded} succeeded, ⚠ ${limited} rejected, ✗ ${failed} error<br><br>${results.join('<br>')}`;
-                fetchCircuitBreakerMetrics();
+                fetchAllMetrics();
             }
         }
     }
@@ -281,7 +346,7 @@
     }
 
     document.getElementById('refresh-button').addEventListener('click', function() {
-        fetchCircuitBreakerMetrics();
+        fetchAllMetrics();
         fetchConfigs();
     });
 
@@ -293,9 +358,9 @@
     });
 
     document.addEventListener('DOMContentLoaded', function() {
-        fetchCircuitBreakerMetrics();
+        fetchAllMetrics();
         fetchConfigs();
-        setInterval(fetchCircuitBreakerMetrics, 3000);
+        setInterval(fetchAllMetrics, 3000);
     });
 </script>
 </body>
